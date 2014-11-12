@@ -1,0 +1,10 @@
+Package: com.zzz.my-idevice-tools
+Name: my-idevice-tools
+Depends: 
+Version: 0.1
+Architecture: iphoneos-arm, applist (>= 1.4.1)
+Description: A set of console tools for iOS devices
+Maintainer: Zhou Hao
+Author: Zhou Hao
+Section: System
+Tag: role::hacker
