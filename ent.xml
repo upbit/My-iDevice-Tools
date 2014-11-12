@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>com.zzz.keychain_enum</string>
+	<string>com.zzz.my-idevice-tools</string>
 	<key>get-task-allow</key>
 	<true/>
 	<key>keychain-access-groups</key>
