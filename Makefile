@@ -1,3 +1,6 @@
+TARGET := iphone:7.1
+ARCHS := armv7 arm64
+
 include theos/makefiles/common.mk
 
 TOOL_NAME = bundle_ids wifi_passwords

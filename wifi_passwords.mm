@@ -19,7 +19,7 @@ void keychain_wifi_passwords()
         CFTypeRef result = NULL;
         OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
         if (status != errSecSuccess) {
-            printf("[ERROR] SecItemCopyMatching() failed! error = %ld\n", status);
+            printf("[ERROR] SecItemCopyMatching() failed! error = %d\n", (int)status);
             return;
         }
         
@@ -48,7 +48,7 @@ void keychain_wifi_passwords()
             CFTypeRef result = NULL;
             OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
             if (status != errSecSuccess) {
-                printf("[ERROR] SecItemCopyMatching() failed! error = %ld\n", status);
+                printf("[ERROR] SecItemCopyMatching() failed! error = %d\n", (int)status);
                 return;
             }
             
