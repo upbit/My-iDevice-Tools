@@ -1,5 +1,5 @@
 TARGET := iphone:7.1
-ARCHS := armv7 arm64
+ARCHS := armv7 armv7s arm64
 
 include theos/makefiles/common.mk
 
@@ -8,9 +8,8 @@ TOOL_NAME = bundle_ids wifi_passwords
 bundle_ids_FILES = bundle_ids.mm
 bundle_ids_LIBRARIES = applist
 
-wifi_passwords_FRAMEWORKS = Security
 wifi_passwords_FILES = wifi_passwords.mm
-
+wifi_passwords_FRAMEWORKS = Security
 
 include $(THEOS_MAKE_PATH)/tool.mk
 
