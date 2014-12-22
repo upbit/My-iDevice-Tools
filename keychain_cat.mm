@@ -1,12 +1,12 @@
 #import <sqlite3.h>
 #import <Security/Security.h>
+#import <Foundation/Foundation.h>
 
 #include <getopt.h>
 
 typedef enum {
     KCCMD_NONE = 0,
     KCCMD_LIST,
-    KCCMD_ADD,
     KCCMD_UPDATE,
     KCCMD_DELETE,
 } KC_CommandType;
@@ -22,7 +22,22 @@ void printToStdOut(NSString *format, ...) {
 void printUsage(char* cmd_line)
 {
 	printf("usage: %s [options]\n", cmd_line);
-	printf("  -h --help                       show this help\n");
+	printf("  -d --dump                       Dump Keychain AccessGroups\n");
+	printf("  -U --update                     UPDATE v_Data with specified value <-g> <-s> <-a> <-v>\n");
+	printf("  -D --delete                     DELETE keychain with <-g> (-s) (-a)\n");
+	printf("  -g --group <AccessGroup>        kSecAttrAccessGroup\n");
+	printf("  -s --service <Service>          kSecAttrService\n");
+	printf("  -a --account <Account>          kSecAttrAccount\n");
+	printf("  -v --value <v_Data>             (UPDATE only) kSecValueData\n");
+	printf("\n");
+	printf("  <SecClass selector>\n");
+	printf("    -G --generic-password         kSecClassGenericPassword\n");
+	printf("    -N --internet-password        kSecClassInternetPassword\n");
+	printf("    -I --identity                 kSecClassIdentity\n");
+	printf("    -C --certificate              kSecClassCertificate\n");
+	printf("    -K --classKey                 kSecClassKey\n");
+	printf("\n");
+	printf("  -h --help                       Show this help\n");
 }
 
 // modify form https://github.com/upbit/Keychain-Dumper/blob/master/main.m#L56, dumpKeychainEntitlements()
@@ -52,15 +67,17 @@ void dumpKeychainAccessGroups()
 	}
 }
 
-void keychain_list_entry(CFTypeRef kSecClassType, NSString *access_group, NSString *service)
+void keychain_list_entry(CFTypeRef kSecClassType, NSString *access_group, NSString *service, NSString *account)
 {
-	NSMutableDictionary *query = [NSMutableDictionary dictionary];
+	NSMutableDictionary *query = [[NSMutableDictionary alloc] init];
 	[query setObject:(id)kSecClassType forKey:(id)kSecClass];
 	[query setObject:(id)kSecMatchLimitAll forKey:(id)kSecMatchLimit];
-	[query setObject:(id)access_group forKey:(id)kSecAttrAccessGroup];
-	if ((service) && (kSecClassType == kSecClassGenericPassword)) {
+	if (access_group)
+		[query setObject:(id)access_group forKey:(id)kSecAttrAccessGroup];
+	if ((service) && (kSecClassType == kSecClassGenericPassword))
 		[query setObject:(id)service forKey:(id)kSecAttrService];
-	}
+	if ((account) && (kSecClassType == kSecClassGenericPassword))
+		[query setObject:(id)account forKey:(id)kSecAttrAccount];
 
 	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnAttributes];
 	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnRef];
@@ -77,29 +94,109 @@ void keychain_list_entry(CFTypeRef kSecClassType, NSString *access_group, NSStri
 	NSArray *keychain_entrys = (NSArray *)result;
 	for (int i = 0; i < keychain_entrys.count; i++) {
 		NSDictionary *entry = (NSDictionary*)keychain_entrys[i];
-		printToStdOut(@"%@\n", entry);
-
+		NSMutableDictionary *mutable_entry = [NSMutableDictionary dictionaryWithDictionary:entry];
+		
 		if ((kSecClassType == kSecClassGenericPassword) || (kSecClassType == kSecClassInternetPassword)) {
-			NSData *password_data = [entry objectForKey:(id)kSecValueData];
-			printToStdOut(@"  + \"s_data\" = %@\n", [[NSString alloc] initWithData:password_data encoding:NSUTF8StringEncoding]);
+			NSData *password_data = [mutable_entry objectForKey:(id)kSecValueData];
+			NSString *password_string = [[NSString alloc] initWithData:password_data encoding:NSUTF8StringEncoding];
+			if (password_string)
+				[mutable_entry setObject:password_string forKey:(id)kSecValueData];
 		}
+
+		printToStdOut(@"<AccessGroup:%@, Service:%@, Account:%@>\n", [mutable_entry objectForKey:(id)kSecAttrAccessGroup], [mutable_entry objectForKey:(id)kSecAttrService], [mutable_entry objectForKey:(id)kSecAttrAccount]);
+		printToStdOut(@"%@\n", mutable_entry);
 	}
-	
+
 	if (result != NULL)
 		CFRelease(result);
 }
 
-
-void keychain_delete_entry(CFTypeRef kSecClassType, NSString *access_group, NSString *service)
+void keychain_update_entry(CFTypeRef kSecClassType, NSString *access_group, NSString *service, NSString *account, NSString *value)
 {
-	NSMutableDictionary *query = [NSMutableDictionary dictionary];
+	NSMutableDictionary *query = [[NSMutableDictionary alloc] init];
 	[query setObject:(id)kSecClassType forKey:(id)kSecClass];
 	[query setObject:(id)kSecMatchLimitAll forKey:(id)kSecMatchLimit];
-	[query setObject:(id)access_group forKey:(id)kSecAttrAccessGroup];
-	if ((service) && (kSecClassType == kSecClassGenericPassword)) {
+	if (!access_group) {
+		printf("[ERROR] --group kSecAttrAccessGroup missed.\n");
+		return;
+	} else {
+		[query setObject:(id)access_group forKey:(id)kSecAttrAccessGroup];
+	}
+	if ((!service) || (kSecClassType != kSecClassGenericPassword)) {
+		printf("[ERROR] --service kSecAttrService missed or SecClass!=kSecClassGenericPassword\n");
+		return;
+	} else {
 		[query setObject:(id)service forKey:(id)kSecAttrService];
 	}
-	
+	if ((!account) || (kSecClassType != kSecClassGenericPassword)) {
+		printf("[ERROR] --account kSecAttrAccount missed or SecClass!=kSecClassGenericPassword\n");
+		return;
+	} else {
+		[query setObject:(id)account forKey:(id)kSecAttrAccount];
+	}
+
+	if (!value) {
+		printf("[ERROR] --value missed.\n");
+		return;
+	}
+
+	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnAttributes];
+	//[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnRef];
+	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
+
+	CFTypeRef result = NULL;
+	OSStatus status = SecItemCopyMatching((CFDictionaryRef)query, &result);
+	if (status != errSecSuccess) {
+		if (status == errSecItemNotFound) return;
+		printf("[ERROR] SecItemCopyMatching() failed! error = %d\n", (int)status);
+		return;
+	}
+
+	NSArray *keychain_entrys = (NSArray *)result;
+	for (int i = 0; i < keychain_entrys.count; i++) {
+		NSDictionary *entry = (NSDictionary*)keychain_entrys[i];
+		NSMutableDictionary *mutable_entry = [NSMutableDictionary dictionaryWithDictionary:entry];
+		NSMutableDictionary *update_item = [NSMutableDictionary dictionaryWithDictionary:entry];
+		[mutable_entry setObject:(id)kSecClassType forKey:(id)kSecClass];
+
+		printToStdOut(@"  Origin: %@\n", update_item);
+
+		[update_item removeObjectForKey:@"accc"];
+		[update_item removeObjectForKey:(id)kSecAttrAccessGroup];
+
+		[update_item setObject:[value dataUsingEncoding:NSUTF8StringEncoding] forKey:(id)kSecValueData];
+		
+		OSStatus status = SecItemUpdate((CFDictionaryRef)mutable_entry, (CFDictionaryRef)update_item);
+		if (status != errSecSuccess) {
+			if (status == errSecItemNotFound) return;
+			printf("[ERROR] SecItemUpdate() failed! error = %d\n", (int)status);
+			printToStdOut(@"  error entry: %@\n", update_item);
+			return;
+		}
+
+		printToStdOut(@">> Update v_Data to: %@\n", [value dataUsingEncoding:NSUTF8StringEncoding]);
+	}
+
+	if (result != NULL)
+		CFRelease(result);
+}
+
+void keychain_delete_entry(CFTypeRef kSecClassType, NSString *access_group, NSString *service, NSString *account)
+{
+	NSMutableDictionary *query = [[NSMutableDictionary alloc] init];
+	[query setObject:(id)kSecClassType forKey:(id)kSecClass];
+	[query setObject:(id)kSecMatchLimitAll forKey:(id)kSecMatchLimit];
+	if (!access_group) {
+		printf("[ERROR] --group kSecAttrAccessGroup missed.\n");
+		return;
+	} else {
+		[query setObject:(id)access_group forKey:(id)kSecAttrAccessGroup];
+	}
+	if ((service) && (kSecClassType == kSecClassGenericPassword))
+		[query setObject:(id)service forKey:(id)kSecAttrService];
+	if ((account) && (kSecClassType == kSecClassGenericPassword))
+		[query setObject:(id)account forKey:(id)kSecAttrAccount];
+
 	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnAttributes];
 	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnRef];
 	[query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
@@ -133,23 +230,23 @@ int main(int argc, char **argv, char **envp)
 {
 	id pool = [NSAutoreleasePool new];
 
-	int cmd = KCCMD_NONE;
+	int cmd = KCCMD_LIST;
 	NSMutableArray *arraySecClass = [[NSMutableArray alloc] init];
 
 	NSString *access_group = nil;
 	NSString *service_name = nil;
+	NSString *account_name = nil;
+	NSString *value_data = nil;
 
 	int opt;
-	const char *shortopts = "Dl:a:u:d:GNICKs:h";
+	const char *shortopts = "dg:s:a:v:GNICKUDh";
 	const struct option longopts[] = {
 		// dump keychain groups
-		{"dump", 0, NULL, 'D'},
-
-		// command <Entitlement Group>
-		{"list", 1, NULL, 'l'},
-		{"add", 1, NULL, 'a'},
-		{"update", 1, NULL, 'u'},
-		{"delete", 1, NULL, 'd'},
+		{"dump", 0, NULL, 'd'},
+		{"group", 1, NULL, 'g'},
+		{"service", 1, NULL, 's'},
+		{"account", 1, NULL, 'a'},
+		{"value", 1, NULL, 'v'},
 
 		// SecClass selector
 		{"generic-password", 0, NULL, 'G'},							// kSecClassGenericPassword
@@ -159,7 +256,8 @@ int main(int argc, char **argv, char **envp)
 		{"classKey", 0, NULL, 'K'},									// kSecClassKey
 
 		// options
-		{"service", 1, NULL, 's'},
+		{"update", 0, NULL, 'U'},
+		{"delete", 0, NULL, 'D'},
 
 		{"help", 0, NULL, 'h'},
 		{NULL, 0, NULL, 0}
@@ -167,41 +265,21 @@ int main(int argc, char **argv, char **envp)
 
 	while((opt = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
 		switch (opt) {
-			case 'D':
+			case 'd':
 				dumpKeychainAccessGroups();
 				return 0;
 
-			case 'l':
-				if (cmd != KCCMD_NONE) {
-					printf("[ERROR] More than one {--list, --add, --update, --delete} found, abort.");
-					return -1;
-				}
-				cmd = KCCMD_LIST;
+			case 'g':
 				access_group = [NSString stringWithUTF8String:optarg];
+				break;
+			case 's':
+				service_name = [NSString stringWithUTF8String:optarg];
 				break;
 			case 'a':
-				if (cmd != KCCMD_NONE) {
-					printf("[ERROR] More than one {--list, --add, --update, --delete} found, abort.");
-					return -1;
-				}
-				cmd = KCCMD_ADD;
-				access_group = [NSString stringWithUTF8String:optarg];
+				account_name = [NSString stringWithUTF8String:optarg];
 				break;
-			case 'u':
-				if (cmd != KCCMD_NONE) {
-					printf("[ERROR] More than one {--list, --add, --update, --delete} found, abort.");
-					return -1;
-				}
-				cmd = KCCMD_UPDATE;
-				access_group = [NSString stringWithUTF8String:optarg];
-				break;
-			case 'd':
-				if (cmd != KCCMD_NONE) {
-					printf("[ERROR] More than one {--list, --add, --update, --delete} found, abort.");
-					return -1;
-				}
-				cmd = KCCMD_DELETE;
-				access_group = [NSString stringWithUTF8String:optarg];
+			case 'v':
+				value_data = [NSString stringWithUTF8String:optarg];
 				break;
 
 			case 'G':
@@ -220,8 +298,11 @@ int main(int argc, char **argv, char **envp)
 				[arraySecClass addObject:(id)kSecClassKey];
 				break;
 
-			case 's':
-				service_name = [NSString stringWithUTF8String:optarg];
+			case 'U':
+				cmd = KCCMD_UPDATE;
+				break;
+			case 'D':
+				cmd = KCCMD_DELETE;
 				break;
 
 			case 'h':
@@ -233,39 +314,29 @@ int main(int argc, char **argv, char **envp)
 		}
 	}
 
-	if (!access_group) {
-		printUsage(argv[0]);
-		return -1;
-	}
-
 	if (arraySecClass.count == 0) {
-		[arraySecClass addObject:(id)kSecClassGenericPassword];		// genp
-
-		if (cmd == KCCMD_LIST) {
+		[arraySecClass addObject:(id)kSecClassGenericPassword];			// genp
+		/*if (cmd == KCCMD_LIST) {
 			[arraySecClass addObject:(id)kSecClassInternetPassword];	// inet
 			[arraySecClass addObject:(id)kSecClassIdentity];			// idnt
 			[arraySecClass addObject:(id)kSecClassCertificate];			// cert
 			[arraySecClass addObject:(id)kSecClassKey];					// keys
-		}
+		}*/
 	}
 
 	for (id kSecClassType in (NSArray *)arraySecClass) {
-		printToStdOut(@">>> SecClass(%@):\n", kSecClassType);
-
+		//printToStdOut(@">>> SecClass(%@):\n", kSecClassType);
 		switch (cmd) {
-			case KCCMD_ADD:
-				// TO-DO: KeychainWrapper
-				break;
 			case KCCMD_UPDATE:
-				// TO-DO: KeychainWrapper
+				keychain_update_entry(kSecClassType, access_group, service_name, account_name, value_data);
 				break;
 			case KCCMD_DELETE:
-				// TO-DO: KeychainWrapper
-				keychain_delete_entry(kSecClassType, access_group, service_name);
+				keychain_delete_entry(kSecClassType, access_group, service_name, account_name);
 				break;
 
-			default:	// KCCMD_LIST
-				keychain_list_entry(kSecClassType, access_group, service_name);
+			case KCCMD_LIST:
+			default:
+				keychain_list_entry(kSecClassType, access_group, service_name, account_name);
 				break;
 		}
 	}

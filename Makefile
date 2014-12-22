@@ -12,7 +12,7 @@ wifi_passwords_FILES = wifi_passwords.mm
 wifi_passwords_FRAMEWORKS = Security
 
 keychain_cat_FILES = keychain_cat.mm
-keychain_cat_FRAMEWORKS = Security
+keychain_cat_FRAMEWORKS = Security Foundation
 keychain_cat_LIBRARIES = sqlite3
 
 include $(THEOS_MAKE_PATH)/tool.mk
