@@ -5,6 +5,7 @@ Tools
 ----------
 * **bundle_ids** - List bundle identifier for installed applications. (depend on **AppList**)
 * **wifi_passwords** - Retrieve a saved WiFi password from keychain.
+* **keychain_cat** - Dump / modify and delete keychain v_Data.
 
 Compiling
 ----------
@@ -13,7 +14,6 @@ git clone https://github.com/upbit/My-iDevice-Tools.git
 cd My-iDevice-Tools
 ln -s /opt/theos ./
 make
-make ldid             # for ldid -Sent.xml
 ```
 
 Requirements
