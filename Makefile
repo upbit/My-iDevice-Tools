@@ -1,9 +1,9 @@
-TARGET := iphone:7.1
+TARGET := iphone:8.1
 ARCHS := armv7 armv7s arm64
 
 include theos/makefiles/common.mk
 
-TOOL_NAME = bundle_ids wifi_passwords keychain_cat
+TOOL_NAME = wifi_passwords keychain_cat #bundle_ids
 
 bundle_ids_FILES = bundle_ids.mm
 bundle_ids_LIBRARIES = applist
